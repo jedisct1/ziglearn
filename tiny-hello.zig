@@ -1,7 +1,5 @@
 const std = @import("std");
 
-pub fn main() void {
-    std.io.getStdOut().writeAll(
-        "Hello World!"
-    ) catch unreachable;
+pub fn main(init: std.process.Init) !void {
+    try std.Io.File.stdout().writeStreamingAll(init.io, "Hello World!");
 }

@@ -8,14 +8,14 @@ test "if statement" {
     } else {
         x += 2;
     }
-    expect(x == 1);
+    try expect(x == 1);
 }
 
 test "if statement expression" {
     const a = true;
     var x: u16 = 0;
     x += if (a) 1 else 2;
-    expect(x == 1);
+    try expect(x == 1);
 }
 
 test "while" {
@@ -23,7 +23,7 @@ test "while" {
     while (i < 100) {
         i *= 2;
     }
-    expect(i == 128);
+    try expect(i == 128);
 }
 
 test "while with continue expression" {
@@ -32,7 +32,7 @@ test "while with continue expression" {
     while (i <= 10) : (i += 1) {
         sum += i;
     }
-    expect(sum == 55);
+    try expect(sum == 55);
 }
 
 test "while with continue" {
@@ -42,7 +42,7 @@ test "while with continue" {
         if (i == 2) continue;
         sum += i;
     }
-    expect(sum == 4);
+    try expect(sum == 4);
 }
 
 test "while with break" {
@@ -52,18 +52,25 @@ test "while with break" {
         if (i == 2) break;
         sum += i;
     }
-    expect(sum == 1);
+    try expect(sum == 1);
 }
 
 test "for" {
     //character literals are equivalent to integer literals
     const string = [_]u8{ 'a', 'b', 'c' };
 
-    for (string) |character, index| {}
+    for (string, 0..) |character, index| {
+        _ = character;
+        _ = index;
+    }
 
-    for (string) |character| {}
+    for (string) |character| {
+        _ = character;
+    }
 
-    for (string) |_, index| {}
+    for (string, 0..) |_, index| {
+        _ = index;
+    }
 
     for (string) |_| {}
 }
@@ -74,8 +81,8 @@ fn addFive(x: u32) u32 {
 
 test "function" {
     const y = addFive(0);
-    expect(@TypeOf(y) == u32);
-    expect(y == 5);
+    try expect(@TypeOf(y) == u32);
+    try expect(y == 5);
 }
 
 fn fibonacci(n: u16) u16 {
@@ -85,16 +92,16 @@ fn fibonacci(n: u16) u16 {
 
 test "function recursion" {
     const x = fibonacci(10);
-    expect(x == 55);
+    try expect(x == 55);
 }
 
 test "defer" {
     var x: i16 = 5;
     {
         defer x += 2;
-        expect(x == 5);
+        try expect(x == 5);
     }
-    expect(x == 7);
+    try expect(x == 7);
 }
 
 test "multi defer" {
@@ -103,7 +110,7 @@ test "multi defer" {
         defer x += 2;
         defer x /= 2;
     }
-    expect(x == 4.5);
+    try expect(x == 4.5);
 }
 
 const FileOpenError = error{
@@ -116,15 +123,15 @@ const AllocationError = error{OutOfMemory};
 
 test "coerce error from a subset to a superset" {
     const err: FileOpenError = AllocationError.OutOfMemory;
-    expect(err == FileOpenError.OutOfMemory);
+    try expect(err == FileOpenError.OutOfMemory);
 }
 
 test "error union" {
     const maybe_error: AllocationError!u16 = 10;
     const no_error = maybe_error catch 0;
 
-    expect(@TypeOf(no_error) == u16);
-    expect(no_error == 10);
+    try expect(@TypeOf(no_error) == u16);
+    try expect(no_error == 10);
 }
 
 fn failingFunction() error{Oops}!void {
@@ -133,7 +140,7 @@ fn failingFunction() error{Oops}!void {
 
 test "returning an error" {
     failingFunction() catch |err| {
-        expect(err == error.Oops);
+        try expect(err == error.Oops);
         return;
     };
 }
@@ -144,11 +151,11 @@ fn failFn() error{Oops}!i32 {
 }
 
 test "try" {
-    var v = failFn() catch |err| {
-        expect(err == error.Oops);
+    const v = failFn() catch |err| {
+        try expect(err == error.Oops);
         return;
     };
-    expect(v == 12); // is never reached
+    try expect(v == 12); // is never reached
 }
 
 var problems: u32 = 98;
@@ -160,8 +167,8 @@ fn failFnCounter() error{Oops}!void {
 
 test "errdefer" {
     failFnCounter() catch |err| {
-        expect(err == error.Oops);
-        expect(problems == 99);
+        try expect(err == error.Oops);
+        try expect(problems == 99);
         return;
     };
 }
@@ -173,6 +180,7 @@ fn createFile() !void {
 test "inferred error set" {
     //type coercion successfully takes place
     const x: error{AccessDenied}!void = createFile();
+    try @import("std").testing.expectError(error.AccessDenied, x);
 }
 
 test "switch statement" {
@@ -188,7 +196,7 @@ test "switch statement" {
         },
         else => {},
     }
-    expect(x == 1);
+    try expect(x == 1);
 }
 
 test "switch expression" {
@@ -198,14 +206,15 @@ test "switch expression" {
         10, 100 => @divExact(x, 10),
         else => x,
     };
-    expect(x == 1);
+    try expect(x == 1);
 }
 
-test "out of bounds, no safety" {
+test "indexing with safety disabled" {
     @setRuntimeSafety(false);
     const a = [3]u8{ 1, 2, 3 };
-    var index: u8 = 5;
+    const index: u8 = 2;
     const b = a[index];
+    try expect(b == 3);
 }
 
 fn asciiToUpper(x: u8) u8 {
@@ -217,8 +226,8 @@ fn asciiToUpper(x: u8) u8 {
 }
 
 test "unreachable switch" {
-    expect(asciiToUpper('a') == 'A');
-    expect(asciiToUpper('A') == 'A');
+    try expect(asciiToUpper('a') == 'A');
+    try expect(asciiToUpper('A') == 'A');
 }
 
 fn increment(num: *u8) void {
@@ -228,12 +237,12 @@ fn increment(num: *u8) void {
 test "pointers" {
     var x: u8 = 1;
     increment(&x);
-    expect(x == 2);
+    try expect(x == 2);
 }
 
 test "usize" {
-    expect(@sizeOf(usize) == @sizeOf(*u8));
-    expect(@sizeOf(isize) == @sizeOf(*u8));
+    try expect(@sizeOf(usize) == @sizeOf(*u8));
+    try expect(@sizeOf(isize) == @sizeOf(*u8));
 }
 
 fn total(values: []const u8) usize {
@@ -244,26 +253,27 @@ fn total(values: []const u8) usize {
 test "slices" {
     const array = [_]u8{ 1, 2, 3, 4, 5 };
     const slice = array[0..3];
-    expect(total(slice) == 6);
+    try expect(total(slice) == 6);
 }
 
 test "slices 2" {
     const array = [_]u8{ 1, 2, 3, 4, 5 };
     const slice = array[0..3];
-    expect(@TypeOf(slice) == *const [3]u8);
+    try expect(@TypeOf(slice) == *const [3]u8);
 }
 
 test "slices 3" {
     var array = [_]u8{ 1, 2, 3, 4, 5 };
-    var slice = array[0..];
+    const slice = array[0..];
+    _ = slice;
 }
 
 const Value = enum(u2) { zero, one, two };
 
 test "enum ordinal value" {
-    expect(@enumToInt(Value.zero) == 0);
-    expect(@enumToInt(Value.one) == 1);
-    expect(@enumToInt(Value.two) == 2);
+    try expect(@backingInt(Value.zero) == 0);
+    try expect(@backingInt(Value.one) == 1);
+    try expect(@backingInt(Value.two) == 2);
 }
 
 const Value2 = enum(u32) {
@@ -274,10 +284,10 @@ const Value2 = enum(u32) {
 };
 
 test "set enum ordinal value" {
-    expect(@enumToInt(Value2.hundred) == 100);
-    expect(@enumToInt(Value2.thousand) == 1000);
-    expect(@enumToInt(Value2.million) == 1000000);
-    expect(@enumToInt(Value2.next) == 1000001);
+    try expect(@backingInt(Value2.hundred) == 100);
+    try expect(@backingInt(Value2.thousand) == 1000);
+    try expect(@backingInt(Value2.million) == 1000000);
+    try expect(@backingInt(Value2.next) == 1000001);
 }
 
 const Suit = enum {
@@ -291,7 +301,7 @@ const Suit = enum {
 };
 
 test "enum method" {
-    expect(Suit.spades.isClubs() == Suit.isClubs(.spades));
+    try expect(Suit.spades.isClubs() == Suit.isClubs(.spades));
 }
 
 const Mode = enum {
@@ -302,12 +312,10 @@ const Mode = enum {
 
 test "hmm" {
     Mode.count += 1;
-    expect(Mode.count == 1);
+    try expect(Mode.count == 1);
 }
 
-const Vec3 = struct {
-    x: f32, y: f32, z: f32
-};
+const Vec3 = struct { x: f32, y: f32, z: f32 };
 
 test "struct usage" {
     const my_vector = Vec3{
@@ -315,17 +323,17 @@ test "struct usage" {
         .y = 100,
         .z = 50,
     };
+    _ = my_vector;
 }
 
-const Vec4 = struct {
-    x: f32, y: f32, z: f32 = 0, w: f32 = undefined
-};
+const Vec4 = struct { x: f32, y: f32, z: f32 = 0, w: f32 = undefined };
 
 test "struct defaults" {
     const my_vector = Vec4{
         .x = 25,
         .y = -50,
     };
+    _ = my_vector;
 }
 
 const Stuff = struct {
@@ -341,8 +349,8 @@ const Stuff = struct {
 test "automatic dereference" {
     var thing = Stuff{ .x = 10, .y = 20 };
     thing.swap();
-    expect(thing.x == 20);
-    expect(thing.y == 10);
+    try expect(thing.x == 20);
+    try expect(thing.y == 10);
 }
 
 const Tag = enum { a, b, c };
@@ -356,40 +364,40 @@ test "switch on tagged union" {
         .b => |*float| float.* *= 2,
         .c => |*b| b.* = !b.*,
     }
-    expect(value.b == 3);
+    try expect(value.b == 3);
 }
 
 test "integer widening" {
     const a: u8 = 250;
     const b: u16 = a;
     const c: u32 = b;
-    expect(c == a);
+    try expect(c == a);
 }
 
 test "@intCast" {
     const x: u64 = 200;
-    const y = @intCast(u8, x);
-    expect(@TypeOf(y) == u8);
+    const y = @as(u8, @intCast(x));
+    try expect(@TypeOf(y) == u8);
 }
 
 test "well defined overflow" {
     var a: u8 = 255;
     a +%= 1;
-    expect(a == 0);
+    try expect(a == 0);
 }
 
 test "float coercion" {
     const a: f16 = 0;
     const b: f32 = a;
     const c: f128 = b;
-    expect(c == a);
+    try expect(c == a);
 }
 
 test "int-float conversion" {
     const a: i32 = 0;
-    const b = @intToFloat(f32, a);
-    const c = @floatToInt(i32, b);
-    expect(c == a);
+    const b = @as(f32, @floatFromInt(a));
+    const c = @as(i32, @intFromFloat(b));
+    try expect(c == a);
 }
 
 test "labelled blocks" {
@@ -399,8 +407,8 @@ test "labelled blocks" {
         while (i < 10) : (i += 1) sum += i;
         break :blk sum;
     };
-    expect(count == 45);
-    expect(@TypeOf(count) == u32);
+    try expect(count == 45);
+    try expect(@TypeOf(count) == u32);
 }
 
 test "nested continue" {
@@ -411,7 +419,7 @@ test "nested continue" {
             continue :outer;
         }
     }
-    expect(count == 8);
+    try expect(count == 8);
 }
 
 fn rangeHasNumber(begin: usize, end: usize, number: usize) bool {
@@ -424,41 +432,44 @@ fn rangeHasNumber(begin: usize, end: usize, number: usize) bool {
 }
 
 test "while loop expression" {
-    expect(rangeHasNumber(0, 10, 3));
+    try expect(rangeHasNumber(0, 10, 3));
 }
 
 test "optional" {
     var found_index: ?usize = null;
     const data = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8, 12 };
-    for (data) |v, i| {
+    for (data, 0..) |v, i| {
         if (v == 10) found_index = i;
     }
-    expect(found_index == null);
+    try expect(found_index == null);
 }
 
 test "orelse" {
-    var a: ?f32 = null;
-    var b = a orelse 0;
-    expect(b == 0);
-    expect(@TypeOf(b) == f32);
+    const a: ?f32 = null;
+    const b: f32 = a orelse 0;
+    try expect(b == 0);
+    try expect(@TypeOf(b) == f32);
 }
 
 test "orelse unreachable" {
     const a: ?f32 = 5;
     const b = a orelse unreachable;
     const c = a.?;
-    expect(b == c);
-    expect(@TypeOf(c) == f32);
+    try expect(b == c);
+    try expect(@TypeOf(c) == f32);
 }
 
 test "if optional payload capture" {
     const a: ?i32 = 5;
     if (a != null) {
         const value = a.?;
+        _ = value;
     }
 
     const b: ?i32 = 5;
-    if (b) |value| {}
+    if (b) |value| {
+        _ = value;
+    }
 }
 
 var numbers_left: u32 = 4;
@@ -473,15 +484,17 @@ test "while null capture" {
     while (eventuallyNullSequence()) |value| {
         sum += value;
     }
-    expect(sum == 6); // 3 + 2 + 1
+    try expect(sum == 6); // 3 + 2 + 1
 }
 
 test "comptime blocks" {
-    var x = comptime fibonacci(10);
+    const x = comptime fibonacci(10);
+    _ = x;
 
-    var y = comptime blk: {
+    const y = comptime blk: {
         break :blk fibonacci(10);
     };
+    _ = y;
 }
 
 test "comptime_int" {
@@ -489,12 +502,15 @@ test "comptime_int" {
     const b = a + 10;
 
     const c: u4 = a;
+    _ = c;
     const d: f32 = b;
+    _ = d;
 }
 
 test "branching on types" {
     const a = 5;
     const b: if (a < 10) f32 else i32 = 5;
+    _ = b;
 }
 
 fn Matrix(
@@ -506,13 +522,13 @@ fn Matrix(
 }
 
 test "returning a type" {
-    expect(Matrix(f32, 4, 4) == [4][4]f32);
+    try expect(Matrix(f32, 4, 4) == [4][4]f32);
 }
 
 fn addSmallInts(comptime T: type, a: T, b: T) T {
     return switch (@typeInfo(T)) {
-        .ComptimeInt => a + b,
-        .Int => |info| if (info.bits <= 16)
+        .comptime_int => a + b,
+        .int => |info| if (info.bits <= 16)
             a + b
         else
             @compileError("ints too large"),
@@ -522,22 +538,17 @@ fn addSmallInts(comptime T: type, a: T, b: T) T {
 
 test "typeinfo switch" {
     const x = addSmallInts(u16, 20, 30);
-    expect(@TypeOf(x) == u16);
-    expect(x == 50);
+    try expect(@TypeOf(x) == u16);
+    try expect(x == 50);
 }
 
 fn getBiggerInt(comptime T: type) type {
-    return @Type(.{
-        .Int = .{
-            .bits = @typeInfo(T).Int.bits + 1,
-            .is_signed = @typeInfo(T).Int.is_signed,
-        },
-    });
+    return @Int(@typeInfo(T).int.signedness, @typeInfo(T).int.bits + 1);
 }
 
-test "@Type" {
-    expect(getBiggerInt(u8) == u9);
-    expect(getBiggerInt(i31) == i32);
+test "@Int" {
+    try expect(getBiggerInt(u8) == u9);
+    try expect(getBiggerInt(i31) == i32);
 }
 
 fn Vec(
@@ -550,7 +561,7 @@ fn Vec(
 
         fn abs(self: Self) Self {
             var tmp = Self{ .data = undefined };
-            for (self.data) |elem, i| {
+            for (self.data, 0..) |elem, i| {
                 tmp.data[i] = if (elem < 0)
                     -elem
                 else
@@ -570,7 +581,7 @@ const eql = @import("std").mem.eql;
 test "generic vector" {
     const x = Vec(3, f32).init([_]f32{ 10, -10, 5 });
     const y = x.abs();
-    expect(eql(f32, &y.data, &[_]f32{ 10, 10, 5 }));
+    try expect(eql(f32, &y.data, &[_]f32{ 10, 10, 5 }));
 }
 
 fn plusOne(x: anytype) @TypeOf(x) {
@@ -578,7 +589,7 @@ fn plusOne(x: anytype) @TypeOf(x) {
 }
 
 test "inferred function parameter" {
-    expect(plusOne(@as(u32, 1)) == 2);
+    try expect(plusOne(@as(u32, 1)) == 2);
 }
 
 test "++" {
@@ -589,35 +600,35 @@ test "++" {
     const b = a[0..];
 
     const new = y ++ b;
-    expect(new.len == 10);
+    try expect(new.len == 10);
 }
 
-test "**" {
+test "array repetition with concatenation" {
     const pattern = [_]u8{ 0xCC, 0xAA };
-    const memory = pattern ** 3;
-    expect(eql(u8, &memory, &[_]u8{ 0xCC, 0xAA, 0xCC, 0xAA, 0xCC, 0xAA }));
+    const memory = pattern ++ pattern ++ pattern;
+    try expect(eql(u8, &memory, &[_]u8{ 0xCC, 0xAA, 0xCC, 0xAA, 0xCC, 0xAA }));
 }
 
 test "inline for" {
     const types = [_]type{ i32, f32, u8, bool };
     var sum: usize = 0;
     inline for (types) |T| sum += @sizeOf(T);
-    expect(sum == 10);
+    try expect(sum == 10);
 }
 
 test "anonymous struct literal" {
     const Point = struct { x: i32, y: i32 };
 
-    var pt: Point = .{
+    const pt: Point = .{
         .x = 13,
         .y = 67,
     };
-    expect(pt.x == 13);
-    expect(pt.y == 67);
+    try expect(pt.x == 13);
+    try expect(pt.y == 67);
 }
 
 test "fully anonymous struct" {
-    dump(.{
+    try dump(.{
         .int = @as(u32, 1234),
         .float = @as(f64, 12.34),
         .b = true,
@@ -625,12 +636,12 @@ test "fully anonymous struct" {
     });
 }
 
-fn dump(args: anytype) void {
-    expect(args.int == 1234);
-    expect(args.float == 12.34);
-    expect(args.b);
-    expect(args.s[0] == 'h');
-    expect(args.s[1] == 'i');
+fn dump(args: anytype) !void {
+    try expect(args.int == 1234);
+    try expect(args.float == 12.34);
+    try expect(args.b);
+    try expect(args.s[0] == 'h');
+    try expect(args.s[1] == 'i');
 }
 
 test "tuple" {
@@ -639,25 +650,25 @@ test "tuple" {
         @as(f64, 12.34),
         true,
         "hi",
-    } ++ .{false} ** 2;
-    expect(values[0] == 1234);
-    expect(values[4] == false);
-    inline for (values) |v, i| {
+    } ++ .{ false, false };
+    try expect(values[0] == 1234);
+    try expect(values[4] == false);
+    inline for (values, 0..) |v, i| {
         if (i != 2) continue;
-        expect(v);
+        try expect(v);
     }
-    expect(values.len == 6);
-    expect(values.@"3"[0] == 'h');
+    try expect(values.len == 6);
+    try expect(values.@"3"[0] == 'h');
 }
 
 test "sentinel termination" {
     const terminated = [3:0]u8{ 3, 2, 1 };
-    expect(terminated.len == 3);
-    expect(@bitCast([4]u8, terminated)[3] == 0);
+    try expect(terminated.len == 3);
+    try expect(@as([4]u8, @bitCast(terminated))[3] == 0);
 }
 
 test "string literal" {
-    expect(@TypeOf("hello") == *const [5:0]u8);
+    try expect(@TypeOf("hello") == *const [5:0]u8);
 }
 
 test "C string" {
@@ -671,53 +682,53 @@ test "C string" {
 }
 
 test "coercion" {
-    var a: [*:0]u8 = undefined;
+    const a: [*:0]u8 = undefined;
     const b: [*]u8 = a;
+    _ = b;
 
-    var c: [5:0]u8 = undefined;
+    const c: [5:0]u8 = undefined;
     const d: [5]u8 = c;
+    _ = d;
 
-    var e: [:10]f32 = undefined;
+    const e: [:10]f32 = undefined;
     const f = e;
+    _ = f;
 }
 
 test "sentinel terminated slicing" {
-    var x = [_:0]u8{255} ** 3;
+    var x: [3:0]u8 = @splat(255);
     const y = x[0..3 :0];
+    _ = y;
 }
 
 const meta = @import("std").meta;
-const Vector = meta.Vector;
 
 test "vector add" {
-    const x: Vector(4, f32) = .{ 1, -10, 20, -1 };
-    const y: Vector(4, f32) = .{ 2, 10, 0, 1 };
+    const x: @Vector(4, f32) = .{ 1, -10, 20, -1 };
+    const y: @Vector(4, f32) = .{ 2, 10, 0, 1 };
     const z = x + y;
-    expect(meta.eql(z, Vector(4, f32){ 3, 0, 20, 0 }));
+    try expect(meta.eql(z, @Vector(4, f32){ 3, 0, 20, 0 }));
 }
 
 test "vector indexing" {
-    const x: Vector(4, u8) = .{ 255, 0, 255, 0 };
-    expect(x[0] == 255);
+    const x: @Vector(4, u8) = .{ 255, 0, 255, 0 };
+    try expect(x[0] == 255);
 }
 
 test "vector * scalar" {
-    const x: Vector(3, f32) = .{ 12.5, 37.5, 2.5 };
-    const y = x * @splat(3, @as(f32, 2));
-    expect(meta.eql(y, Vector(3, f32){ 25, 75, 5 }));
+    const x: @Vector(3, f32) = .{ 12.5, 37.5, 2.5 };
+    const y = x * @as(@Vector(3, f32), @splat(2));
+    try expect(meta.eql(y, @Vector(3, f32){ 25, 75, 5 }));
 }
 
-const len = @import("std").mem.len;
-
 test "vector looping" {
-    const x = Vector(4, u8){ 255, 0, 255, 0 };
-    var sum = blk: {
+    const x = @Vector(4, u8){ 255, 0, 255, 0 };
+    const sum = blk: {
         var tmp: u10 = 0;
-        var i: u8 = 0;
-        while (i < len(x)) : (i += 1) tmp += x[i];
+        inline for (0..x.len) |i| tmp += x[i];
         break :blk tmp;
     };
-    expect(sum == 510);
+    try expect(sum == 510);
 }
 
 const arr: [4]f32 = @Vector(4, f32){ 1, 2, 3, 4 };
